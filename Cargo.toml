@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eframe = "0.28"
+bevy_ecs = "0.14"
 glam = "0.28"
-image = "0.25"
+
+eframe = "0.28"
