@@ -5,6 +5,12 @@ edition = "2021"
 
 [dependencies]
 bevy_ecs = "0.14"
-glam = "0.28"
+parry3d = "0.17"
 
 eframe = "0.28"
+
+[profile.release]
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1
