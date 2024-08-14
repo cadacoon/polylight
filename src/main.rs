@@ -5,9 +5,12 @@ mod color;
 use std::ops::Index;
 use std::time::Instant;
 use eframe::{egui, Frame};
+use eframe::egui::Color32;
+use egui_plot::{Line, Plot, PlotPoints};
 use parry3d::math::{Isometry, Point, Vector};
 use parry3d::query::{Ray, RayCast};
 use parry3d::shape::Ball;
+use crate::color::{CIE, REC709, Vspd, Xyz};
 
 fn main() -> eframe::Result {
     eframe::run_native(
@@ -32,7 +35,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             output: None,
-            output_image: egui::ColorImage::new([512, 512], egui::Color32::BLACK),
+            output_image: egui::ColorImage::new([830 - 360, 512], egui::Color32::BLACK),
             update: true,
         }
     }
@@ -48,14 +51,19 @@ impl eframe::App for App {
             let isom = Isometry::translation(10.0, 0.0, 0.0);
 
             let mut i = 0;
-            for x in 0..self.output_image.width() {
-                for y in 0..self.output_image.height() {
-                    let u = x as f32 / self.output_image.width() as f32;
+            for x in 0..self.output_image.height() {
+                for y in 0..self.output_image.width() {
+                    /*let u = x as f32 / self.output_image.width() as f32;
                     let v = y as f32 / self.output_image.height() as f32;
                     let r = camera.get_ray(u, v);
                     if let Some(c) = ball.cast_ray_and_get_normal(&isom, &r, f32::MAX, true) {
                         self.output_image.pixels[i] = egui::Color32::from_rgb(((c.normal.x + 1.0) * 128.0) as u8, ((c.normal.y + 1.0) * 128.0) as u8, ((c.normal.z + 1.0) * 128.0) as u8);
-                    }
+                    }*/
+                    let x = y as f32 + 360.0;
+                    let xyz = Xyz::from(Vspd(&[(x, 1.0)]));
+                    let rgb = xyz.rgb(REC709);
+
+                    self.output_image.pixels[i] = Color32::from_rgb((rgb.x * 256.0).min(255.0) as u8, (rgb.y * 256.0).min(255.0) as u8, (rgb.z * 256.0).min(255.0) as u8);
                     i += 1;
                 }
             }
@@ -66,6 +74,29 @@ impl eframe::App for App {
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.add(egui::Image::new((output.id(), output.size_vec2())).shrink_to_fit());
+            /*let xa: PlotPoints = (360..830).map(|i| {
+                let x = i as f32;
+                let xyz = Xyz::from(Vspd(&[(x, 1.0)]));
+                [x as f64, xyz.rgb(CIE).x as f64]
+            }).collect();
+            let xb: PlotPoints = (360..830).map(|i| {
+                let x = i as f32;
+                let xyz = Xyz::from(Vspd(&[(x, 1.0)]));
+                [x as f64, xyz.rgb(CIE).y as f64]
+            }).collect();
+            let xc: PlotPoints = (360..830).map(|i| {
+                let x = i as f32;
+                let xyz = Xyz::from(Vspd(&[(x, 1.0)]));
+                [x as f64, xyz.rgb(CIE).z as f64]
+            }).collect();
+            let linea = Line::new(xa).color(Color32::RED);
+            let lineb = Line::new(xb).color(Color32::GREEN);
+            let linec = Line::new(xc).color(Color32::BLUE);
+            Plot::new("cie").view_aspect(2.0).show(ui, |pui| {
+                pui.line(linea);
+                pui.line(lineb);
+                pui.line(linec);
+            });*/
         });
     }
 }

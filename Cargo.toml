@@ -8,6 +8,7 @@ bevy_ecs = "0.14"
 parry3d = "0.17"
 
 eframe = "0.28"
+egui_plot = "0.28"
 
 [profile.release]
 strip = true

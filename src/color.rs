@@ -1,63 +1,24 @@
-use parry3d::na::{Matrix3, Matrix4x2, SimdValue, Vector3, Vector4};
+use parry3d::na::{Matrix3, Vector3};
 
 pub const SPD_SAMPLES: usize = 16;
 pub const SPD_START: f32 = 380.0;
 pub const SPD_END: f32 = 750.0;
 pub const SPD_INTERVAL: f32 = (SPD_END - SPD_START) / SPD_SAMPLES as f32;
 
-struct Spd([f32; SPD_SAMPLES]);
+pub struct Spd(pub [f32; SPD_SAMPLES]);
 
-struct Xyz(Vector3<f32>);
+pub struct Vspd<'a>(pub &'a [(f32, f32)]);
+
+pub struct Xyz(Vector3<f32>);
 
 impl From<Spd> for Xyz {
     fn from(value: Spd) -> Self {
         let mut wavelength = SPD_START;
         let mut xyz = Vector3::new(0.0, 0.0, 0.0);
         for power in value.0 {
-            let x = {
-                let t1 = (wavelength - 442.0) * if wavelength < 442.0 {
-                    0.0624
-                } else {
-                    0.0374
-                };
-                let t2 = (wavelength - 599.8) * if wavelength < 599.8 {
-                    0.0264
-                } else {
-                    0.0323
-                };
-                let t3 = (wavelength - 501.1) * if wavelength < 501.1 {
-                    0.0490
-                } else {
-                    0.0382
-                };
-                0.362 * (-0.5 * t1 * t1).exp() + (1.056 * (-0.5 * t2 * t2).exp()) - (0.065 * (-0.5 * t3 * t3).exp())
-            };
-            let y = {
-                let t1 = (wavelength - 568.8) * if wavelength < 568.8 {
-                    0.0213
-                } else {
-                    0.0247
-                };
-                let t2 = (wavelength - 530.9) * if wavelength < 530.9 {
-                    0.0613
-                } else {
-                    0.0322
-                };
-                0.821 * (-0.5 * t1 * t1).exp() + (0.286 * (-0.5 * t2 * t2).exp())
-            };
-            let z = {
-                let t1 = (wavelength - 437.0) * if wavelength < 437.0 {
-                    0.0845
-                } else {
-                    0.0278
-                };
-                let t2 = (wavelength - 459.0) * if wavelength < 459.0 {
-                    0.0385
-                } else {
-                    0.0725
-                };
-                1.217 * (-0.5 * t1 * t1).exp() + (0.681 * (-0.5 * t2 * t2).exp())
-            };
+            let x = xfit_1931(wavelength);
+            let y = yfit_1931(wavelength);
+            let z = zfit_1931(wavelength);
             wavelength += SPD_INTERVAL;
             xyz += Vector3::new(x, y, z) * power;
         }
@@ -65,15 +26,34 @@ impl From<Spd> for Xyz {
     }
 }
 
-impl Xyz {
-    fn rgb(self, color_space: ColorSpace) -> Vector3<f32> {
-        color_space.0 * self.0
+impl<'a> From<Vspd<'a>> for Xyz {
+    fn from(value: Vspd) -> Self {
+        let mut xyz = Vector3::new(0.0, 0.0, 0.0);
+        for &(wavelength, power) in value.0 {
+            let x = xfit_1931(wavelength);
+            let y = yfit_1931(wavelength);
+            let z = zfit_1931(wavelength);
+            xyz += Vector3::new(x, y, z) * power;
+        }
+        Xyz(xyz)
     }
 }
 
-const REC709: ColorSpace = ColorSpace::new([0.3127, 0.3290], [[0.64, 0.33], [0.30, 0.60], [0.15, 0.06]]);
+impl Xyz {
+    pub fn rgb(self, color_space: ColorSpace) -> Vector3<f32> {
+        let rgb = color_space.0 * self.0;
+        let w = rgb.min().min(0.0);
 
-struct ColorSpace(Matrix3<f32>);
+        //let mut rgb = rgb - Vector3::new(w, w, w);
+
+        return rgb;
+    }
+}
+
+pub const REC709: ColorSpace = ColorSpace::new([0.3127, 0.3290], [[0.64, 0.33], [0.30, 0.60], [0.15, 0.06]]);
+pub const CIE: ColorSpace = ColorSpace::new([0.33333333, 0.33333333], [[0.7355, 0.2645], [0.2658, 0.7243], [0.1669, 0.0085]]);
+
+pub struct ColorSpace(Matrix3<f32>);
 
 impl ColorSpace {
     const fn new(white: [f32; 2], primaries: [[f32; 2]; 3]) -> Self {
@@ -119,4 +99,52 @@ impl ColorSpace {
             bx, by, bz,
         ))
     }
+}
+
+// Wyman, C., Sloan P., & Shirley P. (2013). Journal of Computer Graphics Techniques: Simple Analytic Approximations to the CIE XYZ Color Matching Functions
+fn xfit_1931(wave: f32) -> f32 {
+    let t1 = (wave - 442.0) * if wave < 442.0 {
+        0.0624
+    } else {
+        0.0374
+    };
+    let t2 = (wave - 599.8) * if wave < 599.8 {
+        0.0264
+    } else {
+        0.0323
+    };
+    let t3 = (wave - 501.1) * if wave < 501.1 {
+        0.0490
+    } else {
+        0.0382
+    };
+    0.362 * (-0.5 * t1 * t1).exp() + (1.056 * (-0.5 * t2 * t2).exp()) - (0.065 * (-0.5 * t3 * t3).exp())
+}
+
+fn yfit_1931(wave: f32) -> f32 {
+    let t1 = (wave - 568.8) * if wave < 568.8 {
+        0.0213
+    } else {
+        0.0247
+    };
+    let t2 = (wave - 530.9) * if wave < 530.9 {
+        0.0613
+    } else {
+        0.0322
+    };
+    0.821 * (-0.5 * t1 * t1).exp() + (0.286 * (-0.5 * t2 * t2).exp())
+}
+
+fn zfit_1931(wave: f32) -> f32 {
+    let t1 = (wave - 437.0) * if wave < 437.0 {
+        0.0845
+    } else {
+        0.0278
+    };
+    let t2 = (wave - 459.0) * if wave < 459.0 {
+        0.0385
+    } else {
+        0.0725
+    };
+    1.217 * (-0.5 * t1 * t1).exp() + (0.681 * (-0.5 * t2 * t2).exp())
 }
